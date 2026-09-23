@@ -1,10 +1,12 @@
 [project]
-name = "thesis"
+name = "code-thesis"
 version = "0.1.0"
-description = "Add your description here"
+description = "Codebase for the Msc thesis project"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10,<3.14"
 dependencies = [
-    "numpy>=2.5.3",
-    "torch>=2.14.0",
+    "hs2p>=5.0.0",
+    "openslide-bin>=4.0.1.2",
+    "openslide-python>=1.4.6",
+    "slide2vec>=6.0.1",
 ]

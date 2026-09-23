@@ -10,3 +10,6 @@ wheels/
 .venv
 
 TOKENS.txt
+
+output/*
+dataset/*
