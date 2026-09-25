@@ -9,7 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
-TOKENS.txt
+TOKENS.csv
 
-output/*
+outputs/*
 dataset/*
+cufile.log
