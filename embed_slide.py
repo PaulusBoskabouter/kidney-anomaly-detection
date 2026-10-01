@@ -1,39 +1,6 @@
 import os
-from pathlib import Path
-from slide2vec import ExecutionOptions, Model, PreprocessingConfig
-import slide2vec.runtime.tiling_pipeline as tiling_pipeline
-import gc
-import torch
-from time import sleep
 import subprocess
 import sys
-# Work around a slide2vec bug: process_list.csv's sample_id column gets
-# read back as int64 when filenames are purely numeric, but slide.sample_id
-# is always a str (Path(slide).stem), so the equality check in
-# prepare_tiled_slides() never matches and raises "No process-list entry
-# found" even when tiling succeeded. Force the column back to str.
-_orig_load_tiling_process_df = tiling_pipeline.load_tiling_process_df
-
-def _load_tiling_process_df_str_id(path):
-    df = _orig_load_tiling_process_df(path)
-    df["sample_id"] = df["sample_id"].astype(str)
-    return df
-
-tiling_pipeline.load_tiling_process_df = _load_tiling_process_df_str_id
-
-
-def get_unprocessed_slides(output_dir, dataset_dir="./dataset"):
-    output_dir = Path(output_dir)
-    processed = {p.stem for p in output_dir.glob("*.pt")}
-
-    slides = []
-    for folder in Path(dataset_dir).iterdir():
-        slides += [
-            str(file.resolve())
-            for file in folder.rglob("*.svs")
-            if file.stem not in processed
-        ]
-    return slides
 
 
 def main():
@@ -46,6 +13,8 @@ def main():
     for model_name, token in TOKENS.items():
         env = os.environ.copy()
         env["HF_TOKEN"] = token
+
+        # Load the models using slide2vec in a sub process so that when each model is done, the VRAM gets properly cleared.
         subprocess.run(
             [sys.executable, "run_single_model.py", model_name],
             env=env,
