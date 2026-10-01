@@ -1,5 +1,5 @@
 SRC=/mnt/cpgarchive/archives/toxicology/open-tg-gates/images
-DEST=./dataset/wsi
+DEST=./dataset
 
 mkdir -p "$DEST"
 
