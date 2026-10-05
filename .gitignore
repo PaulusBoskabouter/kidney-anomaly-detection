@@ -16,3 +16,6 @@ segmentation/*
 dataset/*
 cufile.log
 masks/*
+results/*
+
+open_tggates_master_list.csv
