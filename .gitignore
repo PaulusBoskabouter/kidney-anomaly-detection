@@ -11,7 +11,7 @@ wheels/
 
 TOKENS.csv
 
-embeddings/*
+features/*
 segmentation/*
 dataset/*
 cufile.log

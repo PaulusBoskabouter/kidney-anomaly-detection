@@ -1,40 +1,74 @@
-#!/usr/bin/env python3
-import os, shutil, subprocess, sys
 from pathlib import Path
+import os, shutil, subprocess, sys
 
-SRC = Path("/data/pa_cpgarchive/PATH/TO/SLIDES")        # adapt
-MODEL = "virchow2"
-BASE = Path("/data/temporary/paul")                     # adapt
-OUT = BASE / "output" / MODEL
-TMP = BASE / f"tmp_{os.environ.get('SLURM_JOB_ID', 'local')}"
-FAILED = OUT / "failed.txt"
-BATCH = 100
 
-OUT.mkdir(parents=True, exist_ok=True)
+WORK_DIR = Path(sys.argv[1])
+REMOTE_DIR = Path(sys.argv[2])
+OUT_DIR = WORK_DIR/'features'
+BATCHS_SIZE = 5
+BATCH_DIR = WORK_DIR/'dataset'
+MODELS = ['virchow2', 'gigapath', 'conchv15', 'hoptimus-1']
+TOKENS = {}
 
-failed_before = set(FAILED.read_text().split()) if FAILED.exists() else set()
-done = {p.stem for p in OUT.glob("*.pt")}
-todo = sorted(p for p in SRC.rglob("*.svs")
-              if p.stem not in done and p.name not in failed_before)
-print(f"{len(todo)} slides left", flush=True)
 
-for i in range(0, len(todo), BATCH):
-    batch = todo[i:i + BATCH]
-    shutil.rmtree(TMP, ignore_errors=True)
-    TMP.mkdir(parents=True)
+def fetch_processed():
+    processed = {}
+    for model_name in MODELS:
+        for file in (OUT_DIR/model_name).glob('*.pt'): #Slide2vec outputs under OUT_DIR/model_name/*.pt
+            if processed.get(file.stem) is None:
+                processed[file.stem] = 1
+            else:
+                processed[file.stem] += 1
+    return processed
 
-    for p in batch:
-        shutil.copy2(p, TMP / p.name)
 
-    r = subprocess.run(["uv", "run", "feature_extraction.py", "--virchow2",
-                        "--input", str(TMP), "--output", str(OUT)])  # adapt args
+def fetch_batch(processed:dict):
+    current_batch = []
+    for folder in REMOTE_DIR.iterdir():
+        for file in (folder/'kidney').glob("*.svs"):
+            file_count = 0 if (value := processed.get(file.stem)) is None else value
+            if file_count < 4: # Not all models have output this file
+                current_batch.append(file)
+                if len(current_batch) >= BATCHS_SIZE:
+                    return current_batch
 
-    # anything in the batch without a .pt after the run counts as failed
-    missing = [p.name for p in batch if not (OUT / f"{p.stem}.pt").exists()]
-    if missing:
-        with FAILED.open("a") as f:
-            f.write("\n".join(missing) + "\n")
-        print(f"batch {i // BATCH}: {len(missing)} slides produced no output "
-              f"(exit code {r.returncode})", file=sys.stderr, flush=True)
+    return current_batch
 
-    shutil.rmtree(TMP)
+
+
+
+def main():
+    while True:
+        processed = fetch_processed()
+        current_batch = fetch_batch(processed)
+        if not current_batch: # We're done!
+            print("WORKS DONE")
+            quit(101)
+
+        # Download the current batch
+        BATCH_DIR.mkdir(parents=True, exist_ok=True)
+        for file in current_batch:
+            shutil.copy2(file, BATCH_DIR / file.name)
+
+
+        # Fetch HF token
+        with open("TOKENS.csv", 'r') as file:
+            for line in file:
+                line = line.split(',')
+                TOKENS[line[0]] = line[1].rstrip('\n')
+
+        for model in MODELS:
+            env = os.environ.copy()
+            env["HF_TOKEN"] = TOKENS[model]
+
+            # Start feature extraction as a subprocess (that way vram gets cleared properly when the code is done)
+            subprocess.run(
+                [sys.executable, "feature_extraction.py", model, BATCH_DIR.resolve(), (OUT_DIR/model).resolve()],
+                env=env,
+                check=True,
+            )
+
+        shutil.rmtree(BATCH_DIR)
+
+if __name__ == "__main__":
+    main()
