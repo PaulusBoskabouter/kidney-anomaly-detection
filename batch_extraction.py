@@ -29,7 +29,7 @@ def fetch_processed() -> Dict:
     """
     processed = {}
     for model_name in MODELS:
-        for file in (OUT_DIR/model_name).glob('*.pt'): #TODO Slide2vec outputs under OUT_DIR/model_name/slide_embeddings(?)/*.pt
+        for file in (OUT_DIR/model_name/'tile_embeddings').glob('*.pt'):
             if processed.get(file.stem) is None:
                 processed[file.stem] = 1
             else:

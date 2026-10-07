@@ -45,7 +45,7 @@ def get_unprocessed_slides() -> list:
     list
         a list of file paths that have yet to be embedded.
     """
-    processed = [p.stem for p in OUT_DIR.glob("*.pt")] #TODO: Check this pathing.
+    processed = [p.stem for p in (OUT_DIR'tile_embeddings').glob("*.pt")]
     slides = [str(file.resolve()) for file in INPUT_DIR.rglob("*.svs") if file.stem not in processed]
     return slides
 
