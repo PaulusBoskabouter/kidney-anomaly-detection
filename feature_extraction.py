@@ -53,7 +53,6 @@ def get_unprocessed_slides() -> list:
         a list of file paths that have yet to be embedded.
     """
     processed = [p.stem for p in OUT_DIR.glob("*.pt")]
-    print(processed)
 
     slides = [str(file.resolve()) for file in INPUT_DIR.rglob("*.svs") if file.stem not in processed]
     return slides
@@ -84,7 +83,7 @@ def main():
             'sthresh_up':2
         }
     )
-    execution = ExecutionOptions(output_dir=OUT_DIR)
+    execution = ExecutionOptions(output_dir=OUT_DIR) # num_workers_per_gpu=1, num_preprocessing_workers= 16
 
     model.embed_slides(
         slides,

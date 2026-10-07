@@ -4,17 +4,21 @@ import os, shutil, subprocess, sys
 
 WORK_DIR = Path(sys.argv[1])
 REMOTE_DIR = Path(sys.argv[2])
+BATCH_DIR = Path(sys.argv[3])
 OUT_DIR = WORK_DIR/'features'
+
 BATCHS_SIZE = 5
-BATCH_DIR = WORK_DIR/'dataset'
 MODELS = ['virchow2', 'gigapath', 'conchv15', 'hoptimus-1']
 TOKENS = {}
+ATTEMPTS = {}
+MAX_ATTEMPTS = 2
+
 
 
 def fetch_processed():
     processed = {}
     for model_name in MODELS:
-        for file in (OUT_DIR/model_name).glob('*.pt'): #Slide2vec outputs under OUT_DIR/model_name/*.pt
+        for file in (OUT_DIR/model_name).glob('*.pt'): #TODO Slide2vec outputs under OUT_DIR/model_name/slide_embeddings(?)/*.pt
             if processed.get(file.stem) is None:
                 processed[file.stem] = 1
             else:
@@ -25,13 +29,16 @@ def fetch_processed():
 def fetch_batch(processed:dict):
     current_batch = []
     for folder in REMOTE_DIR.iterdir():
-        for file in (folder/'kidney').glob("*.svs"):
-            file_count = 0 if (value := processed.get(file.stem)) is None else value
-            if file_count < 4: # Not all models have output this file
+        slide_location = folder / 'Kidney'
+        if not slide_location.exists():
+            continue
+        for file in slide_location.glob("*.svs"):
+            if ATTEMPTS.get(file.stem, 0) >= MAX_ATTEMPTS:
+                continue                              # given up, keep looking
+            if processed.get(file.stem, 0) < len(MODELS):
                 current_batch.append(file)
                 if len(current_batch) >= BATCHS_SIZE:
                     return current_batch
-
     return current_batch
 
 
@@ -41,9 +48,10 @@ def main():
     while True:
         processed = fetch_processed()
         current_batch = fetch_batch(processed)
+
         if not current_batch: # We're done!
-            print("WORKS DONE")
-            quit(101)
+            print("WORKS DONE! :-)")
+            sys.exit(0)
 
         # Download the current batch
         BATCH_DIR.mkdir(parents=True, exist_ok=True)
@@ -62,11 +70,15 @@ def main():
             env["HF_TOKEN"] = TOKENS[model]
 
             # Start feature extraction as a subprocess (that way vram gets cleared properly when the code is done)
-            subprocess.run(
-                [sys.executable, "feature_extraction.py", model, BATCH_DIR.resolve(), (OUT_DIR/model).resolve()],
-                env=env,
-                check=True,
-            )
+            try:
+                subprocess.run([sys.executable, "feature_extraction.py", model, BATCH_DIR.resolve(), (OUT_DIR/model).resolve()], env=env, check=True)
+            except subprocess.CalledProcessError as oopsie:
+                print(f"{model} failed on this batch", flush=True)
+                print(oopsie)
+
+
+        for slide in current_batch:
+            ATTEMPTS[slide.stem] = ATTEMPTS.get(slide.stem, 0) + 1
 
         shutil.rmtree(BATCH_DIR)
 
