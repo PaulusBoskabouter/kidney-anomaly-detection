@@ -40,32 +40,26 @@ tiling_pipeline.load_tiling_process_df = _load_tiling_process_df_str_id
 
 def get_unprocessed_slides() -> list:
     """ Short function to get a list of all the yet-to-be-embedded WSI files.
-    Parameters
-    ----------
-    output_dir : str
-        The output directory of the embedding
-    dataset_dir : str
-        The location of the dataset
-
     Returns
     -------
     list
         a list of file paths that have yet to be embedded.
     """
-    processed = [p.stem for p in OUT_DIR.glob("*.pt")]
-
+    processed = [p.stem for p in OUT_DIR.glob("*.pt")] #TODO: Check this pathing.
     slides = [str(file.resolve()) for file in INPUT_DIR.rglob("*.svs") if file.stem not in processed]
     return slides
 
 
-def main():
-    model_name = sys.argv[1]
+def main() -> None:
+
+    # 1. Get the list of slides that need processing
     slides = get_unprocessed_slides()
     if not slides:
-        print(f"No unprocessed slides for {model_name}, skipping.")
+        print(f"No unprocessed slides for {MODEL}, skipping.")
         return
 
-    model = Model.from_preset(model_name)
+    # 2. Set the (pre-)processing parameters
+    model = Model.from_preset(MODEL)
     preprocessing = PreprocessingConfig(
         requested_spacing_um=0.5,
         tolerance=0.07,
@@ -85,6 +79,7 @@ def main():
     )
     execution = ExecutionOptions(output_dir=OUT_DIR) # num_workers_per_gpu=1, num_preprocessing_workers= 16
 
+    # 3. Poor GPU
     model.embed_slides(
         slides,
         preprocessing=preprocessing,

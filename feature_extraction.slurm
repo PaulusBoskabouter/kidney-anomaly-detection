@@ -25,7 +25,7 @@ export UV_PROJECT_ENVIRONMENT=/tmp/venv
 export UV_CACHE_DIR=/local_temporary/paul/uv-cache
 export UV_LINK_MODE=copy
 export HF_HOME=/local_temporary/hf # For storing the downloaded models.
-export PYTHONUNBUFFERED=1 # For debugging
+export PYTHONUNBUFFERED=1 # For debugging`
 
 
 cd $CODE_FOLDER  # contains pyproject.toml + uv.lock
