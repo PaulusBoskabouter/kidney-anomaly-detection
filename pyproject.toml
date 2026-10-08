@@ -5,6 +5,7 @@ description = "Codebase for the Msc thesis project"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
+    "einops-exts>=0.0.4",
     "hs2p>=5.0.0",
     "openslide-bin>=4.0.1.2",
     "openslide-python>=1.4.6",

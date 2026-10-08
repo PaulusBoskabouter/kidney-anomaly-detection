@@ -102,7 +102,7 @@ def main():
 
             # Start feature extraction as a subprocess (that way vram gets cleared properly when the code is done)
             try:
-                subprocess.run([sys.executable, WORK_DIR / 'feature_extraction.py', model, BATCH_DIR.resolve(), (OUT_DIR/model/'tile_embeddings(?)').resolve()], env=env, check=True)
+                subprocess.run([sys.executable, WORK_DIR / 'feature_extraction.py', model, BATCH_DIR.resolve(), (OUT_DIR/model/'tile_embeddings').resolve()], env=env, check=True)
             except subprocess.CalledProcessError as oopsie:
                 print(f"{model} failed on this batch", flush=True)
                 print(oopsie)
