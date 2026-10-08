@@ -8,7 +8,7 @@ REMOTE_DIR = Path(sys.argv[2])
 BATCH_DIR = Path(sys.argv[3])
 OUT_DIR = WORK_DIR/'features'
 
-BATCH_SIZE = 5
+BATCH_SIZE = 50
 MODELS = ['virchow2', 'gigapath', 'conchv15', 'h-optimus-1']
 TOKENS = {}
 

@@ -245,6 +245,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "einops-exts" },
     { name = "hs2p" },
+    { name = "numpy" },
     { name = "openslide-bin" },
     { name = "openslide-python" },
     { name = "slide2vec" },
@@ -254,6 +255,7 @@ dependencies = [
 requires-dist = [
     { name = "einops-exts", specifier = ">=0.0.4" },
     { name = "hs2p", specifier = ">=5.0.0" },
+    { name = "numpy", specifier = ">=1.26.4" },
     { name = "openslide-bin", specifier = ">=4.0.1.2" },
     { name = "openslide-python", specifier = ">=1.4.6" },
     { name = "slide2vec", specifier = ">=6.0.1" },

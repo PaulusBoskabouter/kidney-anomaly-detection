@@ -28,7 +28,7 @@ export HF_HOME=/local_temporary/hf # For storing the downloaded models.
 export PYTHONUNBUFFERED=1 # For debugging`
 
 
-cd $CODE_FOLDER  # contains pyproject.toml + uv.lock
+cd $CODE_FOLDER  # contains pyproject.toml + uv.lock`
 
 uv sync --frozen
 

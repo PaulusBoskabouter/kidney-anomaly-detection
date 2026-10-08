@@ -68,7 +68,7 @@ def main() -> None:
             'min_coverage':{"tissue": 0.3}
         },
         preview={
-            "save_mask_preview": False,
+            "save_mask_preview": True,
             "save_tiling_preview": False
         },
         segmentation={
@@ -77,7 +77,7 @@ def main() -> None:
             'sthresh_up':2
         }
     )
-    execution = ExecutionOptions(output_dir=OUT_DIR) # num_workers_per_gpu=1, num_preprocessing_workers= 16
+    execution = ExecutionOptions(output_dir=OUT_DIR)
 
     # 3. Poor GPU
     model.embed_slides(
