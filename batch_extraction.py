@@ -17,6 +17,41 @@ ATTEMPTS = {}
 MAX_ATTEMPTS = 2
 
 
+def list_slides() -> list[Path]:
+    """
+    Short function for fetching all the dataset files. Used for checking completion
+    Returns
+    ----------
+    list : slides
+        list containing ALL the Paths of the dataset.
+    """
+    slides = []
+    for folder in REMOTE_DIR.iterdir():
+        slide_location = folder / 'Kidney'
+        if slide_location.exists():
+            slides.extend(slide_location.glob("*.svs"))
+    return slides
+
+
+def check_completion() -> None:
+    """
+    Short function for checking if all the models have fully processed all dataset files.
+    """
+    slides = list_slides()
+    todo = {}
+    for model in MODELS:
+        done = {p.stem for p in (OUT_DIR / model / 'tile_embeddings').glob("*.pt")}
+        todo[model] = [s.name for s in slides if s.stem not in done]
+
+    print(f"{len(slides)} slides in total")
+    for model, files in todo.items():
+        if len(files) == 0:
+             print(f"{model} is done!")
+        else:
+            print(f"{model} has to finish the following file(s) ({len(files)}):")
+            for file in files:
+                print("\t"+file)
+            print('\t'+'-'*9)
 
 def fetch_processed() -> Dict:
     """
@@ -28,8 +63,8 @@ def fetch_processed() -> Dict:
         Dictionary containing file: #number of models that have processed it.
     """
     processed = {}
-    for model_name in MODELS:
-        for file in (OUT_DIR/model_name/'tile_embeddings').glob('*.pt'):
+    for model in MODELS:
+        for file in (OUT_DIR/model/'tile_embeddings').glob('*.pt'):
             if processed.get(file.stem) is None:
                 processed[file.stem] = 1
             else:
@@ -102,7 +137,7 @@ def main():
 
             # Start feature extraction as a subprocess (that way vram gets cleared properly when the code is done)
             try:
-                subprocess.run([sys.executable, WORK_DIR / 'feature_extraction.py', model, BATCH_DIR.resolve(), (OUT_DIR/model/'tile_embeddings').resolve()], env=env, check=True)
+                subprocess.run([sys.executable, WORK_DIR / 'feature_extraction.py', model, BATCH_DIR.resolve(), (OUT_DIR/model).resolve()], env=env, check=True)
             except subprocess.CalledProcessError as oopsie:
                 print(f"{model} failed on this batch", flush=True)
                 print(oopsie)
@@ -115,4 +150,7 @@ def main():
         shutil.rmtree(BATCH_DIR)
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 4 and sys.argv[4] == "check":
+        check_completion()
+    else:
+        main()
