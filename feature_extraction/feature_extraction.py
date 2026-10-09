@@ -45,7 +45,7 @@ def get_unprocessed_slides() -> list:
     list
         a list of file paths that have yet to be embedded.
     """
-    processed = [p.stem for p in (OUT_DIR / 'tile_embeddings').glob("*.pt")]
+    processed = [p.stem for p in (OUT_DIR / 'tile_embeddings').rglob("*.pt")]
     slides = [str(file.resolve()) for file in INPUT_DIR.rglob("*.svs") if file.stem not in processed]
     return slides
 
@@ -60,9 +60,12 @@ def main() -> None:
 
     # 2. Set the (pre-)processing parameters
     model = Model.from_preset(MODEL)
+
+
+    #
     preprocessing = PreprocessingConfig(
         requested_spacing_um=0.5,
-        tolerance=0.07,
+        tolerance=0.0,
         overlap=0.0,
         masks={
             'min_coverage':{"tissue": 0.3}
@@ -77,7 +80,7 @@ def main() -> None:
             'sthresh_up':2
         }
     )
-    execution = ExecutionOptions(output_dir=OUT_DIR) # num_workers_per_gpu=1, num_preprocessing_workers= 16
+    execution = ExecutionOptions(output_dir=OUT_DIR)
 
     # 3. Poor GPU
     model.embed_slides(

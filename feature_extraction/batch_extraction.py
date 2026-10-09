@@ -1,14 +1,16 @@
 from pathlib import Path
 import os, shutil, subprocess, sys
 from typing_extensions import Dict
+from hs2p import SlideSpec, TilingConfig, SegmentationConfig, PreviewConfig, tile_slides
+
 
 
 WORK_DIR = Path(sys.argv[1]) # The directory where the code lives
 REMOTE_DIR = Path(sys.argv[2])
 BATCH_DIR = Path(sys.argv[3])
-OUT_DIR = WORK_DIR/'features'
+OUT_DIR = WORK_DIR/'embeddings'
 
-BATCH_SIZE = 5
+BATCH_SIZE = 600
 MODELS = ['virchow2', 'gigapath', 'conchv15', 'h-optimus-1']
 TOKENS = {}
 
@@ -108,8 +110,8 @@ def main():
     Main loop, see comments throughout code.
     But tl;dr is fetches batches and runs feature_extraction.py as sub process.
     """
+    processed_files = []
     while True:
-
         # 1. fetch all the batches
         processed = fetch_processed()
         current_batch = fetch_batch(processed)
@@ -120,8 +122,12 @@ def main():
 
         # 2. Copy the files for this batch to the local node
         BATCH_DIR.mkdir(parents=True, exist_ok=True)
+        i = 1
         for file in current_batch:
+            print(f"Copying files... ({i:3}/{len(current_batch):3})", end='\r')
             shutil.copy2(file, BATCH_DIR / file.name)
+            i += 1
+        print("All files copied!")
 
 
         # 3. Fetch the HF tokens
@@ -130,24 +136,55 @@ def main():
                 line = line.split(',')
                 TOKENS[line[0]] = line[1].rstrip('\n')
 
-        # 4. For each model; start the sub-process of feature extraction
+
+
+        # 4. Save the mask for later inspection.
+        slides = [SlideSpec(sample_id=file.stem, image_path=file) for file in BATCH_DIR.rglob("*.svs") if file.stem not in [prev.stem for prev in (WORK_DIR / 'segmentation' / 'preview'/ 'mask').glob("*.jpg")]]
+        if slides:
+            tile_slides(
+                slides,
+                tiling=TilingConfig(
+                    requested_spacing_um=0.5,
+                    requested_tile_size_px=224,
+                    tolerance=0.0,
+                    overlap=0.0,
+                    min_coverage={"tissue": 0.3},
+                ),
+                segmentation=SegmentationConfig(method="hsv", downsample=64, sthresh_up=2),
+                preview=PreviewConfig(save_mask_preview=True, save_tiling_preview=False, downsample=64),
+                output_dir=Path(WORK_DIR/'segmentation'),
+            )
+            print(f"Created mask previews for {len(slides)} WSI's")
+        else:
+            print("Found no unique slides to make mask previews for")
+
+
+
+        # 5. For each model; start the sub-process of feature extraction
         for model in MODELS:
             env = os.environ.copy()
             env["HF_TOKEN"] = TOKENS[model]
 
-            # Start feature extraction as a subprocess (that way vram gets cleared properly when the code is done)
+            #Start feature extraction as a subprocess (that way vram gets cleared properly when the code is done)
             try:
-                subprocess.run([sys.executable, WORK_DIR / 'feature_extraction.py', model, BATCH_DIR.resolve(), (OUT_DIR/model).resolve()], env=env, check=True)
+                subprocess.run([sys.executable, WORK_DIR / 'feature_extraction' / 'feature_extraction.py', model, BATCH_DIR.resolve(), (OUT_DIR/model).resolve()], env=env, check=True)
             except subprocess.CalledProcessError as oopsie:
                 print(f"{model} failed on this batch", flush=True)
                 print(oopsie)
 
-        # 5. keep track of whether slide files failed (exceeding MAX_ATTEMPTS cull the file (which will need manual checking at some point.))
+
+        # 6. keep track of whether slide files failed (exceeding MAX_ATTEMPTS cull the file (which will need manual checking at some point.))
         for slide in current_batch:
             ATTEMPTS[slide.stem] = ATTEMPTS.get(slide.stem, 0) + 1
+            if slide not in processed_files:
+                processed_files.append(slide)
 
-        # 6. Clear the local folder to save space.
+        # 7. Clear the local folder to save space.
         shutil.rmtree(BATCH_DIR)
+
+        # 8. Simple statement for keeping track of the progress:
+        # NOTE if a file is not fully processed (by all models) yet it will still count it in this print statement so it's only a rough estimate.
+        print(f"Number of slides processed ~{len(processed_files)}")
 
 if __name__ == "__main__":
     if len(sys.argv) > 4 and sys.argv[4] == "check":
