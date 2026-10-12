@@ -1,22 +1,28 @@
+from datetime import datetime_CAPI
 from pathlib import Path
 import os, shutil, subprocess, sys
 from typing_extensions import Dict
 from hs2p import SlideSpec, TilingConfig, SegmentationConfig, PreviewConfig, tile_slides
-
+import pandas as pd
+from datetime import datetime
 
 
 WORK_DIR = Path(sys.argv[1]) # The directory where the code lives
-REMOTE_DIR = Path(sys.argv[2])
-BATCH_DIR = Path(sys.argv[3])
-OUT_DIR = WORK_DIR/'embeddings'
+REMOTE_DIR = Path(sys.argv[2]) # The directory where the dataset lives
+BATCH_DIR = Path(sys.argv[3]) # The directory where the dataset (batch) gets pulled to
+MODEL = sys.argv[4] # Model name
+ID = int(sys.argv[5]) # either '0' or '1'
+FILES = pd.read_csv(WORK_DIR / 'assigned.csv')
 
-BATCH_SIZE = 600
-MODELS = ['virchow2', 'gigapath', 'conchv15', 'h-optimus-1']
+BATCH_SIZE = 2
+MODELS =  ['h-optimus-1', 'conchv15', 'gigapath', 'virchow2']
 TOKENS = {}
+assert MODEL in MODELS or MODEL=='check', f"{MODEL} doesn't exist, try {MODELS} or 'check'. {type(MODEL)}"
 
 # Used for failed attempts (so we don't get stuck in the while True loop.)
 ATTEMPTS = {}
-MAX_ATTEMPTS = 2
+MAX_ATTEMPTS = 3
+
 
 
 def list_slides() -> list[Path]:
@@ -35,46 +41,7 @@ def list_slides() -> list[Path]:
     return slides
 
 
-def check_completion() -> None:
-    """
-    Short function for checking if all the models have fully processed all dataset files.
-    """
-    slides = list_slides()
-    todo = {}
-    for model in MODELS:
-        done = {p.stem for p in (OUT_DIR / model / 'tile_embeddings').glob("*.pt")}
-        todo[model] = [s.name for s in slides if s.stem not in done]
-
-    print(f"{len(slides)} slides in total")
-    for model, files in todo.items():
-        if len(files) == 0:
-             print(f"{model} is done!")
-        else:
-            print(f"{model} has to finish the following file(s) ({len(files)}):")
-            for file in files:
-                print("\t"+file)
-            print('\t'+'-'*9)
-
-def fetch_processed() -> Dict:
-    """
-    Short function to get a dictionary for keeping track of which WSI's have yet-to-be-embedded.
-
-    Returns
-    ----------
-    dict : processed
-        Dictionary containing file: #number of models that have processed it.
-    """
-    processed = {}
-    for model in MODELS:
-        for file in (OUT_DIR/model/'tile_embeddings').glob('*.pt'):
-            if processed.get(file.stem) is None:
-                processed[file.stem] = 1
-            else:
-                processed[file.stem] += 1
-    return processed
-
-
-def fetch_batch(processed:dict) -> list[Path]:
+def fetch_batch() -> list[Path]:
     """
     Short function to get a list of all the yet-to-be-embedded WSI files.
 
@@ -88,21 +55,41 @@ def fetch_batch(processed:dict) -> list[Path]:
     list : current_batch
         a list of file Paths that have yet to be embedded of size BATCH_SIZE
     """
+
     current_batch = []
+
     for folder in REMOTE_DIR.iterdir():
         slide_location = folder / 'Kidney'
         if not slide_location.exists():
             continue
         for file in slide_location.glob("*.svs"):
+            # Check whether output already exists:
+            if (WORK_DIR/ 'embeddings' / MODEL / 'tile_embeddings'/ f'{file.stem}.pt').exists():
+                continue
+
+            # Check if file is assigned to this jobs 'ID'.
+            a = FILES.loc[
+                    (FILES["file"] == file.name) & (FILES["assigned"] == ID),
+                    "assigned"
+                ]
+            if a.empty:
+                continue
+
+            # File has had too many attempts, keep looking
             if ATTEMPTS.get(file.stem, 0) >= MAX_ATTEMPTS:
-                continue                              # given up, keep looking
-            if processed.get(file.stem, 0) < len(MODELS):
-                current_batch.append(file)
-                if len(current_batch) >= BATCH_SIZE:
-                    return current_batch
+                time = datetime.now()
+                print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\t{file.name} has too many attempts, skipping...")
+                continue
+
+            # Else populate the current batch with this file.
+            current_batch.append(file)
+
+
+            # And of course limit our batch to the batch size.
+            if len(current_batch) == BATCH_SIZE:
+                return current_batch
+
     return current_batch
-
-
 
 
 def main():
@@ -110,24 +97,25 @@ def main():
     Main loop, see comments throughout code.
     But tl;dr is fetches batches and runs feature_extraction.py as sub process.
     """
-    processed_files = []
+
     while True:
-        # 1. fetch all the batches
-        processed = fetch_processed()
-        current_batch = fetch_batch(processed)
+        # 1. fetch a batch
+        current_batch = fetch_batch()
+
 
         if not current_batch: # If we don't have any batches left we must be done!
-            print("WORKS DONE! :-)")
+            time = datetime.now()
+            print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tWorks done!")
             sys.exit(0)
 
         # 2. Copy the files for this batch to the local node
         BATCH_DIR.mkdir(parents=True, exist_ok=True)
-        i = 1
+        time = datetime.now()
+        print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tCopying {len(current_batch)} file(s) over...")
         for file in current_batch:
-            print(f"Copying files... ({i:3}/{len(current_batch):3})", end='\r')
             shutil.copy2(file, BATCH_DIR / file.name)
-            i += 1
-        print("All files copied!")
+            time = datetime.now()
+        print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tAll files copied!")
 
 
         # 3. Fetch the HF tokens
@@ -141,6 +129,8 @@ def main():
         # 4. Save the mask for later inspection.
         slides = [SlideSpec(sample_id=file.stem, image_path=file) for file in BATCH_DIR.rglob("*.svs") if file.stem not in [prev.stem for prev in (WORK_DIR / 'segmentation' / 'preview'/ 'mask').glob("*.jpg")]]
         if slides:
+            time = datetime.now()
+            print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:2}:{time.minute:2}):\tGenerating masks for slides...")
             tile_slides(
                 slides,
                 tiling=TilingConfig(
@@ -154,40 +144,39 @@ def main():
                 preview=PreviewConfig(save_mask_preview=True, save_tiling_preview=False, downsample=64),
                 output_dir=Path(WORK_DIR/'segmentation'),
             )
-            print(f"Created mask previews for {len(slides)} WSI's")
+
         else:
-            print("Found no unique slides to make mask previews for")
+            time = datetime.now()
+            print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tNo masks needed for current slides.")
 
 
+        # 5. Start the sub-process of feature extraction
+        env = os.environ.copy()
+        env["HF_TOKEN"] = TOKENS[MODEL]
 
-        # 5. For each model; start the sub-process of feature extraction
-        for model in MODELS:
-            env = os.environ.copy()
-            env["HF_TOKEN"] = TOKENS[model]
-
-            #Start feature extraction as a subprocess (that way vram gets cleared properly when the code is done)
-            try:
-                subprocess.run([sys.executable, WORK_DIR / 'feature_extraction' / 'feature_extraction.py', model, BATCH_DIR.resolve(), (OUT_DIR/model).resolve()], env=env, check=True)
-            except subprocess.CalledProcessError as oopsie:
-                print(f"{model} failed on this batch", flush=True)
-                print(oopsie)
+        # 6. Start feature extraction as a subprocess (that way vram gets cleared properly when the code is done)
+        time = datetime.now()
+        print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tStarting embedding of {len(current_batch)} slides.")
+        try:
+            subprocess.run([sys.executable, WORK_DIR / 'feature_extraction' / 'feature_extraction.py', MODEL, BATCH_DIR.resolve(), WORK_DIR.resolve()], env=env, check=True)
+        except subprocess.CalledProcessError as oopsie: # this should no longer be needed, TODO CHECK!
+            print('='*10)
+            print(oopsie)
+            print('='*10)
 
 
-        # 6. keep track of whether slide files failed (exceeding MAX_ATTEMPTS cull the file (which will need manual checking at some point.))
+        # 7. keep track of whether slide files failed (exceeding MAX_ATTEMPTS cull the file (which will need manual checking at some point.))
         for slide in current_batch:
             ATTEMPTS[slide.stem] = ATTEMPTS.get(slide.stem, 0) + 1
-            if slide not in processed_files:
-                processed_files.append(slide)
 
-        # 7. Clear the local folder to save space.
-        shutil.rmtree(BATCH_DIR)
 
         # 8. Simple statement for keeping track of the progress:
-        # NOTE if a file is not fully processed (by all models) yet it will still count it in this print statement so it's only a rough estimate.
-        print(f"Number of slides processed ~{len(processed_files)}")
+        time = datetime.now()
+        print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tFinished batch, completed {len(list(BATCH_DIR.rglob('*.svs')))}.")
+
+        # 9. Clear the local folder to save space.
+        shutil.rmtree(BATCH_DIR, ignore_errors=True)
 
 if __name__ == "__main__":
-    if len(sys.argv) > 4 and sys.argv[4] == "check":
-        check_completion()
-    else:
-        main()
+    shutil.rmtree(BATCH_DIR, ignore_errors=True) # Make sure it's already empty
+    main()

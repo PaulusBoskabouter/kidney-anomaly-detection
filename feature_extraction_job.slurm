@@ -3,11 +3,10 @@
 #SBATCH --qos=high
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=16
-#SBATCH --gres=gpumem:10g
 #SBATCH --mem=30G
 #SBATCH --time=7-00:00:00
-#SBATCH --job-name="Feature extraction"
-#SBATCH --output=/home/paulverhoeven/logs/feat_extr-%j.out
+#SBATCH --job-name="Conchv15-0"
+#SBATCH --output=/home/paulverhoeven/logs/conchv15-0-%j.out
 #SBATCH --container-mounts=/data/pa_cpgarchive:/data/pa_cpgarchive,/data/pathology:/data/pathology
 #SBATCH --container-image="dockerdex.umcn.nl:5005#paulusboskabouter/uv-package:latest"
 #SBATCH --requeue
@@ -33,5 +32,4 @@ cd $CODE_FOLDER  # contains pyproject.toml + uv.lock
 uv sync --frozen
 
 # batch_extraction has input parameters code_directory, remote_dir(Location of datasets on cpgarchives), batch_directory(where to (temporarily) locally store the copied data)
-uv run --frozen ./feature_extraction/batch_extraction.py . $DATASET $BATCH_LOCATION
-uv run --frozen ./feature_extraction/batch_extraction.py . $DATASET $BATCH_LOCATION check
+uv run --frozen ./feature_extraction/batch_extraction.py . $DATASET $BATCH_LOCATION conchv15 0

@@ -11,6 +11,7 @@ wheels/
 
 TOKENS.csv
 
+test.py
 embeddings/*
 segmentation/*
 dataset/*
