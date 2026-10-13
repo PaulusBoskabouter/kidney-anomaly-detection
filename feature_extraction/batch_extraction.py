@@ -1,7 +1,6 @@
-from datetime import datetime_CAPI
+import torch
 from pathlib import Path
 import os, shutil, subprocess, sys
-from typing_extensions import Dict
 from hs2p import SlideSpec, TilingConfig, SegmentationConfig, PreviewConfig, tile_slides
 import pandas as pd
 from datetime import datetime
@@ -76,9 +75,12 @@ def fetch_batch() -> list[Path]:
                 continue
 
             # File has had too many attempts, keep looking
-            if ATTEMPTS.get(file.stem, 0) >= MAX_ATTEMPTS:
-                time = datetime.now()
-                print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\t{file.name} has too many attempts, skipping...")
+            if ATTEMPTS.get(file.stem, 0) >= MAX_ATTEMPTS
+                # Print this debug statement only once
+                if ATTEMPTS.get(file.stem) == MAX_ATTEMPTS:
+                    time = datetime.now()
+                    print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\t{file.name} has too many attempts, skipping...")
+                    ATTEMPTS[file.stem] += 1
                 continue
 
             # Else populate the current batch with this file.
@@ -97,7 +99,8 @@ def main():
     Main loop, see comments throughout code.
     But tl;dr is fetches batches and runs feature_extraction.py as sub process.
     """
-
+    time = datetime.now()
+    print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tStarting the features extraction on {'GPU' if torch.cuda.is_available() else 'CPU'}.")
     while True:
         # 1. fetch a batch
         current_batch = fetch_batch()
@@ -114,7 +117,7 @@ def main():
         print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tCopying {len(current_batch)} file(s) over...")
         for file in current_batch:
             shutil.copy2(file, BATCH_DIR / file.name)
-            time = datetime.now()
+        time = datetime.now()
         print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tAll files copied!")
 
 
