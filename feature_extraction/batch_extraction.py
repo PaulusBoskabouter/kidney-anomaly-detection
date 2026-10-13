@@ -75,7 +75,7 @@ def fetch_batch() -> list[Path]:
                 continue
 
             # File has had too many attempts, keep looking
-            if ATTEMPTS.get(file.stem, 0) >= MAX_ATTEMPTS
+            if ATTEMPTS.get(file.stem, 0) >= MAX_ATTEMPTS:
                 # Print this debug statement only once
                 if ATTEMPTS.get(file.stem) == MAX_ATTEMPTS:
                     time = datetime.now()
@@ -133,7 +133,7 @@ def main():
         slides = [SlideSpec(sample_id=file.stem, image_path=file) for file in BATCH_DIR.rglob("*.svs") if file.stem not in [prev.stem for prev in (WORK_DIR / 'segmentation' / 'preview'/ 'mask').glob("*.jpg")]]
         if slides:
             time = datetime.now()
-            print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:2}:{time.minute:2}):\tGenerating masks for slides...")
+            print(f"({time.day:2}-{time.month:2}-{time.year:4} @ {time.hour:02}:{time.minute:02}):\tGenerating masks for slides...")
             tile_slides(
                 slides,
                 tiling=TilingConfig(
