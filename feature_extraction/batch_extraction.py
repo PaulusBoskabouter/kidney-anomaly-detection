@@ -13,7 +13,7 @@ MODEL = sys.argv[4] # Model name
 ID = int(sys.argv[5]) # either '0' or '1'
 FILES = pd.read_csv(WORK_DIR / 'assigned.csv')
 
-BATCH_SIZE = 2
+BATCH_SIZE = 600
 MODELS =  ['h-optimus-1', 'conchv15', 'gigapath', 'virchow2']
 TOKENS = {}
 assert MODEL in MODELS or MODEL=='check', f"{MODEL} doesn't exist, try {MODELS} or 'check'. {type(MODEL)}"
